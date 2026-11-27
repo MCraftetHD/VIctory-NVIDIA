@@ -31,3 +31,33 @@ jobs:
       # Includes xtask's repository_passes_policy, the asset-policy check.
       - name: Tests
         run: cargo test --workspace --locked
+
+  # Both routes of scripts/build-on-linux.sh (building the exe from Linux for
+  # a run under Wine): the MinGW one and the MSVC one through cargo-xwin,
+  # which is the only one with the D3D12 Agility exports.
+  linux-cross:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: mingw, target: x86_64-pc-windows-gnu }
+          - { toolchain: xwin, target: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v5
+      # The version and components pinned in rust-toolchain.toml.
+      - run: rustup toolchain install
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-${{ matrix.target }}
+      - name: Install the cross compiler
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.toolchain == 'mingw' && 'mingw-w64' || 'clang' }}
+      - name: Install cargo-xwin
+        if: matrix.toolchain == 'xwin'
+        run: cargo install cargo-xwin --locked
+      - name: Build
+        run: cargo ${{ matrix.toolchain == 'mingw' && 'build' || 'xwin build' }} --release --locked --target ${{ matrix.target }} -p victory
+      - name: The exe exists
+        run: ls -l target/${{ matrix.target }}/release/victory.exe && sha256sum target/${{ matrix.target }}/release/victory.exe
