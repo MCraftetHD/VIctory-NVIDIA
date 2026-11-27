@@ -29,11 +29,14 @@ jobs:
           set -o pipefail
           cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee /tmp/clippy.log || {
             { echo '## Clippy (last 30000 bytes)'; echo '```'; tail -c 30000 /tmp/clippy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            oneline=$(tail -c 30000 /tmp/clippy.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
-            len=${#oneline}; i=0
-            while [ "$i" -lt "$len" ]; do
-              printf '::error title=clippy part %d::%s\n' $((i / 6000 + 1)) "${oneline:i:6000}"
-              i=$((i + 6000))
+            oneline=$(sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' /tmp/clippy.log)
+            len=${#oneline}; total=$(( (len + 799) / 800 ))
+            # The first error comes first in clippy's output; at most ten
+            # annotations of a step survive, so take the ten from the start.
+            i=0; n=1
+            while [ "$i" -lt "$len" ] && [ "$n" -le 10 ]; do
+              printf '::error title=clippy part %d of %d::%s\n' "$n" "$total" "${oneline:i:800}"
+              i=$((i + 800)); n=$((n + 1))
             done
             exit 1
           }
@@ -73,11 +76,20 @@ jobs:
           set -o pipefail
           cargo ${{ matrix.toolchain == 'mingw' && 'build' || 'xwin build' }} --release --locked --target ${{ matrix.target }} -p victory 2>&1 | tee /tmp/build.log || {
             { echo "## Build ${{ matrix.target }} (last 30000 bytes)"; echo '```'; tail -c 30000 /tmp/build.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            oneline=$(tail -c 30000 /tmp/build.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
-            len=${#oneline}; i=0
-            while [ "$i" -lt "$len" ]; do
-              printf '::error title=build ${{ matrix.target }} part %d::%s\n' $((i / 6000 + 1)) "${oneline:i:6000}"
-              i=$((i + 6000))
+            oneline=$(sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' /tmp/build.log)
+            len=${#oneline}
+            # The error comes last in a build's output; at most ten
+            # annotations of a step survive, so take the last 8000 escaped
+            # characters and emit those, newest part first.
+            if [ "$len" -gt 8000 ]; then
+                oneline="${oneline:$((len - 8000))}"
+                len=8000
+            fi
+            i=$(( (len / 800) * 800 )); n=$(( len / 800 + 1 ))
+            if [ $(( len % 800 )) -eq 0 ] && [ "$len" -gt 0 ]; then n=$((n - 1)); fi
+            while [ "$i" -ge 0 ] && [ "$n" -ge 1 ]; do
+              printf '::error title=build ${{ matrix.target }} tail %d::%s\n' "$n" "${oneline:i:800}"
+              i=$((i - 800)); n=$((n - 1))
             done
             exit 1
           }
