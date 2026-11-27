@@ -25,7 +25,13 @@ jobs:
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee /tmp/clippy.log || {
+            { echo '## Clippy (last 30000 bytes)'; echo '```'; tail -c 30000 /tmp/clippy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            printf '::error title=clippy output::%s\n' "$(tail -c 30000 /tmp/clippy.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' | head -c 6000)"
+            exit 1
+          }
       - name: Clippy, diagnostics build
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       # Includes xtask's repository_passes_policy, the asset-policy check.
@@ -58,6 +64,12 @@ jobs:
         if: matrix.toolchain == 'xwin'
         run: cargo install cargo-xwin --locked
       - name: Build
-        run: cargo ${{ matrix.toolchain == 'mingw' && 'build' || 'xwin build' }} --release --locked --target ${{ matrix.target }} -p victory
+        run: |
+          set -o pipefail
+          cargo ${{ matrix.toolchain == 'mingw' && 'build' || 'xwin build' }} --release --locked --target ${{ matrix.target }} -p victory 2>&1 | tee /tmp/build.log || {
+            { echo "## Build ${{ matrix.target }} (last 30000 bytes)"; echo '```'; tail -c 30000 /tmp/build.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            printf '::error title=build ${{ matrix.target }}::%s\n' "$(tail -c 30000 /tmp/build.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' | head -c 6000)"
+            exit 1
+          }
       - name: The exe exists
         run: ls -l target/${{ matrix.target }}/release/victory.exe && sha256sum target/${{ matrix.target }}/release/victory.exe
