@@ -29,7 +29,12 @@ jobs:
           set -o pipefail
           cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee /tmp/clippy.log || {
             { echo '## Clippy (last 30000 bytes)'; echo '```'; tail -c 30000 /tmp/clippy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            printf '::error title=clippy output::%s\n' "$(tail -c 30000 /tmp/clippy.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' | head -c 6000)"
+            oneline=$(tail -c 30000 /tmp/clippy.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            len=${#oneline}; i=0
+            while [ "$i" -lt "$len" ]; do
+              printf '::error title=clippy part %d::%s\n' $((i / 6000 + 1)) "${oneline:i:6000}"
+              i=$((i + 6000))
+            done
             exit 1
           }
       - name: Clippy, diagnostics build
@@ -68,7 +73,12 @@ jobs:
           set -o pipefail
           cargo ${{ matrix.toolchain == 'mingw' && 'build' || 'xwin build' }} --release --locked --target ${{ matrix.target }} -p victory 2>&1 | tee /tmp/build.log || {
             { echo "## Build ${{ matrix.target }} (last 30000 bytes)"; echo '```'; tail -c 30000 /tmp/build.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            printf '::error title=build ${{ matrix.target }}::%s\n' "$(tail -c 30000 /tmp/build.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' | head -c 6000)"
+            oneline=$(tail -c 30000 /tmp/build.log | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            len=${#oneline}; i=0
+            while [ "$i" -lt "$len" ]; do
+              printf '::error title=build ${{ matrix.target }} part %d::%s\n' $((i / 6000 + 1)) "${oneline:i:6000}"
+              i=$((i + 6000))
+            done
             exit 1
           }
       - name: The exe exists
