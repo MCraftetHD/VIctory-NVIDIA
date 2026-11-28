@@ -1369,7 +1369,11 @@ mod host {
                 .map(|(i, vk)| KeyState {
                     // A scripted letter is the stand-in pad's key of that
                     // name, where a US layout has it (`pad_key`).
-                    scan_code: Some(vk).filter(|_| i < scripted_keys).and_then(super::letter_position).unwrap_or_else(|| {
+                    scan_code: if i < scripted_keys {
+                        super::letter_position(vk)
+                    } else {
+                        None
+                    }.unwrap_or_else(|| {
                         // SAFETY: plain query.
                         unsafe { MapVirtualKeyW(u32::from(vk), MAPVK_VK_TO_VSC_EX) }
                     }),
