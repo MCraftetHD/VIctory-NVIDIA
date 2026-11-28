@@ -9,8 +9,9 @@
 #                                      Windows builds use, with the D3D12
 #                                      Agility exports, which need Visual
 #                                      Studio's linker and are left out of the
-#                                      MinGW one (under Wine both run DXVK's
-#                                      Direct3D 12 anyway)
+#                                      MinGW one (on Windows that chooses the
+#                                      Direct3D 12 runtime; under Wine it does
+#                                      not, see the README's CachyOS part)
 #
 # The exe lands in target/<target>/release/victory.exe; put it next to your
 # own dump of the title, beside game_scarlett_master.exe, and start it as
