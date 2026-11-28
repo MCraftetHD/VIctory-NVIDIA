@@ -416,6 +416,12 @@ pub(crate) fn get_dlss() -> Result<()> {
 /// Asks once, at a start without NVIDIA's files, whether to fetch them.
 fn offer_dlss() {
     let Ok(to) = nvidia_home() else { return };
+    if victory_loader::wine_version().is_some() {
+        println!("No NVIDIA files: running without DLSS and frame generation. The fetcher runs Windows PowerShell,");
+        println!("which Wine only stubs: on Linux, run scripts/fetch-under-linux.sh from the repository for the same");
+        println!("files, then start again.");
+        return;
+    }
     let declined = to.join("declined");
     if declined.exists() || !std::io::stdin().is_terminal() {
         println!("No NVIDIA files: running without DLSS and frame generation (`victory get-dlss` fetches them).");
@@ -466,6 +472,12 @@ pub(crate) fn get_fsr() -> Result<()> {
 /// Asks once, at a start that would use FSR 3 without AMD's files, whether to fetch them.
 fn offer_fsr(card: &str) {
     let Ok(to) = amd_home() else { return };
+    if victory_loader::wine_version().is_some() {
+        println!("No AMD FSR 3 files: frame generation stays off. The fetcher runs Windows PowerShell, which Wine");
+        println!("only stubs: on Linux, run scripts/fetch-under-linux.sh from the repository for the same files,");
+        println!("then start again.");
+        return;
+    }
     let declined = to.join("declined");
     if declined.exists() || !std::io::stdin().is_terminal() {
         println!("No AMD FSR 3 files: frame generation stays off on this card (`victory get-fsr` fetches them).");
@@ -670,11 +682,25 @@ pub(crate) fn get_d3d12() -> Result<()> {
 fn check_shader_model() -> Result<()> {
     let needed = victory_hle::streamline::SHADER_MODEL_NEEDED;
     let Some(found) = shader_model() else { return Ok(()) };
+    let under_wine = victory_loader::wine_version().is_some();
     let to = d3d12_dir()?;
     let had = to.join("D3D12Core.dll").is_file();
-    let windows_10 = !had && crate::windows_build().is_some_and(|build| build < 22000);
+    // Under Wine the Direct3D 12 is Wine's own or the prefix's vkd3d-proton's: what it reports is
+    // what runs, and the Agility folder (and the fetcher, which is Windows PowerShell) does nothing.
+    let windows_10 = !had && !under_wine && crate::windows_build().is_some_and(|build| build < 22000);
     if found >= needed && !windows_10 {
         return Ok(());
+    }
+    if under_wine && found < needed {
+        println!("Wine's Direct3D 12 runs shader model {}.{}, and the game's translated shaders need 6.6.", found.0, found.1);
+        println!("Microsoft's Agility runtime cannot help under Wine: Wine's Direct3D 12 does not read a D3D12Core.dll");
+        println!("beside this program, and the fetcher runs Windows PowerShell, which Wine only stubs. Give Wine");
+        println!("vkd3d-proton's d3d12 instead; the README's \"On CachyOS (Linux)\" part has the ways.");
+        anyhow::bail!(
+            "Wine's Direct3D 12 runs shader model {}.{}, and the game needs 6.6: every shader would be refused",
+            found.0,
+            found.1
+        );
     }
     if !had {
         if found < needed {

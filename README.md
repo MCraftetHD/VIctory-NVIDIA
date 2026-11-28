@@ -153,7 +153,7 @@ give Wine vkd3d-proton's Direct3D 12 (shader model 6.6), the one Proton runs:
 
 # or keep this prefix and hand it vkd3d-proton's d3d12:
 WINEPREFIX=~/.wine ./setup_vkd3d_proton.sh install   # from the release zip
-wine victory.exe play --series-s                     # from the dump's folder
+wine victory.exe play --series-s --framegen 2        # from the dump's folder
 ```
 
 The dlls ship prebuilt in vkd3d-proton's GitHub releases. Out of a Proton
@@ -166,9 +166,13 @@ something short, it says what.
 
 NVIDIA's, AMD's and Microsoft's fetchers (`victory get-dlss`, `victory
 get-fsr`, `victory get-d3d12`) run Windows PowerShell, which Wine only
-stubs: none of them downloads anything there. Fetch the files by hand
-instead: AMD's two FidelityFX DLLs from GPUOpen's FidelityFX SDK GitHub, and
-NVIDIA's Streamline from its GitHub releases. (`get-d3d12` has no Linux
+stubs: none of them downloads anything there. `scripts/fetch-under-linux.sh
+<folder of the game>` fetches the same files instead — AMD's two FidelityFX
+DLLs and NVIDIA's Streamline, the same versions, checked against the same
+checksums — into `fidelityfx/` and `nvidia-sdk/Streamline/bin/x64` beside
+the exe. Frame generation is asked for with `--framegen 2` (2X on FSR 3,
+which needs NVIDIA's files for the DLSS upscaling as well as AMD's two).
+(`get-d3d12` has no Linux
 stand-in: its Agility runtime is the Windows remedy, and under Wine the
 Direct3D 12 is Wine's or vkd3d-proton's, as the paragraph above says.) The
 start looks for them in a
