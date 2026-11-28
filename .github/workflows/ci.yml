@@ -37,7 +37,7 @@ jobs:
             # nothing in the compiler's output breaks them. Only every
             # error's own line: at most ten annotations survive a step.
             printf '::error title=clippy log bytes::%s\n' "$(wc -c < /tmp/clippy.log)"
-            b64=$(sed -e $'s/\x1b\\[[0-9;]*m//g' /tmp/clippy.log | grep -aA1 -E '^(error|warning)(\[|:)' | head -64 | base64 -w0)
+            b64=$(sed -e $'s/\x1b\\[[0-9;]*m//g' /tmp/clippy.log | grep -aA4 -E '^(error|warning)(\[|:)' | head -48 | base64 -w0)
             len=${#b64}; i=0; n=1
             while [ "$i" -lt "$len" ] && [ "$n" -le 9 ]; do
               printf '::error title=clippy errors %d::%s\n' "$n" "${b64:i:600}"
