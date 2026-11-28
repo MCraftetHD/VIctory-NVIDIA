@@ -34,18 +34,14 @@ jobs:
           cargo clippy --workspace --all-targets --locked -j 1 -- -D warnings 2>&1 | tee /tmp/clippy.log || {
             { echo '## Clippy (last 30000 bytes)'; echo '```'; tail -c 30000 /tmp/clippy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
             # The annotations carry the log base64-encoded: pure ASCII, so
-            # nothing in the compiler's output breaks them. First every
-            # error's own line, then the log's end.
+            # nothing in the compiler's output breaks them. Only every
+            # error's own line: at most ten annotations survive a step.
             printf '::error title=clippy log bytes::%s\n' "$(wc -c < /tmp/clippy.log)"
-            for capture in \
-                "$(grep -nE '^(error|warning)(\[|:)' /tmp/clippy.log | head -60)" \
-                "$(tail -c 3200 /tmp/clippy.log)"; do
-              b64=$(printf '%s' "$capture" | base64 -w0)
-              len=${#b64}; i=0; n=1
-              while [ "$i" -lt "$len" ] && [ "$n" -le 10 ]; do
-                printf '::error title=clippy b64 part %d::%s\n' "$n" "${b64:i:600}"
-                i=$((i + 600)); n=$((n + 1))
-              done
+            b64=$(grep -E '^(error|warning)(\[|:)' /tmp/clippy.log | head -60 | base64 -w0)
+            len=${#b64}; i=0; n=1
+            while [ "$i" -lt "$len" ] && [ "$n" -le 9 ]; do
+              printf '::error title=clippy errors %d::%s\n' "$n" "${b64:i:600}"
+              i=$((i + 600)); n=$((n + 1))
             done
             exit 1
           }
