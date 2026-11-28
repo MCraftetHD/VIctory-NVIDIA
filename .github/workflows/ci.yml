@@ -62,7 +62,20 @@ jobs:
           }
       # Includes xtask's repository_passes_policy, the asset-policy check.
       - name: Tests
-        run: cargo test --workspace --locked
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace --locked -j 1 2>&1 | tee /tmp/test.log || {
+            { echo '## Tests (last 20000 bytes)'; echo '```'; tail -c 20000 /tmp/test.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            printf '::error title=tests log bytes::%s\n' "$(wc -c < /tmp/test.log)"
+            b64=$(sed -e $'s/\x1b\\[[0-9;]*m//g' /tmp/test.log | grep -aA6 -E '(^error(\[|:)|^---- |panicked at|test result: FAILED)' | head -60 | base64 -w0)
+            len=${#b64}; i=0; n=1
+            while [ "$i" -lt "$len" ] && [ "$n" -le 9 ]; do
+              printf '::error title=tests %d::%s\n' "$n" "${b64:i:600}"
+              i=$((i + 600)); n=$((n + 1))
+            done
+            exit 1
+          }
 
   # Both routes of scripts/build-on-linux.sh (building the exe from Linux for
   # a run under Wine): the MinGW one and the MSVC one through cargo-xwin,
