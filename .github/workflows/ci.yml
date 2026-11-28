@@ -28,7 +28,10 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee /tmp/clippy.log || {
+          # One compilation job at a time: clippy-driver of the bigger crates
+          # runs the whole runner out of memory when they build in parallel,
+          # and the killed run's log just stops.
+          cargo clippy --workspace --all-targets --locked -j 1 -- -D warnings 2>&1 | tee /tmp/clippy.log || {
             { echo '## Clippy (last 30000 bytes)'; echo '```'; tail -c 30000 /tmp/clippy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
             # The annotations carry the log base64-encoded: pure ASCII, so
             # nothing in the compiler's output breaks them.
