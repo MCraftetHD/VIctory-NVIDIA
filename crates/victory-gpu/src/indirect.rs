@@ -305,8 +305,6 @@ fn rest() -> u32 {
 /// The clamp compiled from `source` (ours, or in the benchmark the one it
 /// replaced).
 fn make_from(device: &ID3D12Device, source: &str) -> windows::core::Result<Clamp> {
-    #[cfg(feature = "diagnostics")]
-    let _batched = source == batch::SOURCE;
     let source = &format!("#define WIDEST {}u\n#define REST {}\n{source}", widest(amd(device)), rest());
     let mut code: Option<ID3DBlob> = None;
     let mut errors: Option<ID3DBlob> = None;
@@ -2666,7 +2664,6 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
     /// clamps spend all of it is followed, after the reset, by one whose
     /// small record still runs.
     #[test]
-    #[ignore = "the budget's spend depends on the adapter: WARP runs the record a real card clamps"]
     fn host_list_budget_starts_empty_at_each_submission() {
         let Some(host) = super::host() else {
             return;
@@ -2698,7 +2695,10 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
             }
             sig.unwrap()
         };
-        // Three records of 65,535 x 16 groups: about half the budget each.
+        // Two records of 65,535 x 16 groups (64 threads each, 2^26 - 2,048
+        // threads), then one of 32 groups (2,048 threads): together exactly
+        // the budget, so the small record after them does not fit whether
+        // or not a record that does not fit takes the rest (`rest`).
         let Some((big, big_ptr)) = host.shared_buffer(3 * u64::from(STRIDE)) else {
             return;
         };
@@ -2711,7 +2711,7 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
         // SAFETY: mapped buffers of these sizes; nothing runs yet.
         unsafe {
             for i in 0..3 {
-                let words = [65535u32, 16, 1];
+                let words = if i < 2 { [65535u32, 16, 1] } else { [32, 1, 1] };
                 std::ptr::copy_nonoverlapping(
                     words.as_ptr().cast::<u8>(),
                     big_ptr.add(i * STRIDE as usize),
@@ -3150,7 +3150,6 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_DispatchThreadID) {
     /// Records past the list's budget come out empty, and one read by many
     /// executions is charged for each.
     #[test]
-    #[ignore = "the spent budget needs the card's write to reach the CPU's mapping, which WARP's does not"]
     fn warp_batch_charges_every_execution() {
         let Some(mut warp) = WarpHarness::new() else {
             return;
@@ -3195,7 +3194,20 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_DispatchThreadID) {
             };
             assert_eq!(out.iter().filter(|&&v| v == 1 << 22).count(), filled, "{times} times {records}: {out:?}");
             assert!(out.iter().all(|&v| v == 0 || v == 1 << 22));
-            assert_eq!(spent, BUDGET.min((1 << 26) * times * records as u32));
+            // Each record's job charges 2^26 for every execution, in order:
+            // one that does not fit takes the rest with `REST`, else nothing.
+            let rest = super::rest() != 0;
+            let expected = (0..records).fold(0u32, |at, _| {
+                let cost = (1u32 << 26) * times;
+                if BUDGET - at >= cost {
+                    at + cost
+                } else if rest {
+                    BUDGET
+                } else {
+                    at
+                }
+            });
+            assert_eq!(spent, expected, "{times} times {records}");
         }
     }
 
@@ -3532,7 +3544,6 @@ void work() {
         heap_pairs: [[Option<ID3D12DescriptorHeap>; 2]; 2],
         tables: [D3D12_GPU_DESCRIPTOR_HANDLE; 2],
         targets: [D3D12_CPU_DESCRIPTOR_HANDLE; 2],
-        _depth_written: D3D12_CPU_DESCRIPTOR_HANDLE,
         depth_tested: D3D12_CPU_DESCRIPTOR_HANDLE,
         stamps: ID3D12QueryHeap,
         back: ID3D12Resource,
@@ -3879,7 +3890,6 @@ void work() {
                     heap_pairs,
                     tables,
                     targets,
-                    _depth_written: depth_written,
                     depth_tested,
                     stamps,
                     back,

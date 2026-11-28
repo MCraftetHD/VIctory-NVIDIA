@@ -62,7 +62,7 @@ fn book() -> Option<&'static Mutex<Book>> {
         let mut shaders = HashSet::new();
         let ends = [
             walk_shaders(&dir, |_, hash, _, _| {
-                let _ = shaders.insert(hash);
+                shaders.insert(hash);
             }),
             walk_pipelines(&dir, |_, bytes| {
                 keys.extend(bytes.first_chunk::<16>().copied());
@@ -207,6 +207,7 @@ pub fn fingerprint() -> String {
     if let Some(host) = crate::host::host() {
         h.update(&host.driver().to_le_bytes());
     }
+    h.update(&super::samplers::order());
     h.finalize().to_hex()[..16].to_owned()
 }
 
@@ -236,7 +237,7 @@ pub fn keep_library() {
 pub fn make(dir: &Path, which: &[usize], mut each: impl FnMut(usize, Option<(f64, bool)>)) {
     let mut places = HashMap::new();
     walk_shaders(dir, |stage, hash, at, len| {
-        let _ = places.insert(hash, (stage, at, len));
+        places.insert(hash, (stage, at, len));
     });
     let Ok(mut file) = std::fs::File::open(dir.join(SHADERS)) else { return };
     let wanted: HashSet<usize> = which.iter().copied().collect();
