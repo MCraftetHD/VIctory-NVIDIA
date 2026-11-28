@@ -346,6 +346,7 @@ mod tests {
                 let list = format!("other.dll {:x}\nT.dll 0x{at:x}\nt.dll {at:x}\nt.dll 5\nt.dll\n", at);
                 assert_eq!(apply("t.dll", second, 0x1000, &list), 1);
                 assert_eq!(std::ptr::read((second + at) as *const u8), 0xe9);
+                // SAFETY: both addresses hold a copy of the code just written there, whose form is `F`.
                 let (plain, changed): (F, F) = (std::mem::transmute(place), std::mem::transmute(second));
                 for was in 0..=255u8 {
                     let mut bytes = [[0u8; 0x40]; 2];
@@ -422,6 +423,7 @@ mod tests {
                 if size == 0 {
                     continue;
                 }
+                // SAFETY: both addresses hold a copy of the code just written there, whose form is `F`.
                 let (plain, changed): (F, F) = (std::mem::transmute(place), std::mem::transmute(second));
                 let data = VirtualAlloc(std::ptr::null(), 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) as *mut u8;
                 for seed in 0..200u64 {
