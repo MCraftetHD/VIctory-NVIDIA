@@ -67,12 +67,13 @@ else
     # The cc crate compiles blake3's C with clang-cl; cargo-xwin fetches
     # Microsoft's own import libraries and headers, so lld-link can take the
     # MSVC linker arguments apps/victory/build.rs hands it.
-    if ! command -v clang-cl >/dev/null 2>&1; then
+    if ! command -v clang-cl >/dev/null 2>&1 || ! command -v llvm-ar >/dev/null 2>&1; then
         if command -v pacman >/dev/null 2>&1; then
-            echo "==> pacman -S --needed clang (clang-cl compiles blake3's C)"
-            sudo pacman -S --needed clang
+            echo "==> pacman -S --needed clang llvm (clang-cl compiles blake3's C, llvm-ar archives it)"
+            sudo pacman -S --needed clang llvm
         else
-            echo "no clang-cl in PATH: install clang (Debian and Ubuntu: sudo apt-get install -y clang)"
+            echo "no clang-cl or llvm-ar in PATH: install clang and llvm"
+            echo "(Debian and Ubuntu: sudo apt-get install -y clang llvm)"
             exit 1
         fi
     fi

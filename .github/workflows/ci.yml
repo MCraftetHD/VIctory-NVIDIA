@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -29,17 +30,22 @@ jobs:
           set -o pipefail
           cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee /tmp/clippy.log || {
             { echo '## Clippy (last 30000 bytes)'; echo '```'; tail -c 30000 /tmp/clippy.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            oneline=$(sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' /tmp/clippy.log)
-            len=${#oneline}; total=$(( (len + 799) / 800 ))
-            # The first error comes first in clippy's output; at most ten
-            # annotations of a step survive, so take the ten from the start.
-            i=0; n=1
-            while [ "$i" -lt "$len" ] && [ "$n" -le 10 ]; do
-              printf '::error title=clippy part %d of %d::%s\n' "$n" "$total" "${oneline:i:800}"
-              i=$((i + 800)); n=$((n + 1))
-            done
             exit 1
           }
+      # The clippy output, on the pull request: the raw log download needs a
+      # signed-in session, the comment does not.
+      - name: The clippy output, on the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### CI: clippy output (last 6000 bytes of the log)"
+            echo '```'
+            tail -c 6000 /tmp/clippy.log 2>/dev/null || echo '(no clippy log was written)'
+            echo '```'
+          } > /tmp/clippy-comment.md
+          gh api "repos/$GITHUB_REPOSITORY/issues/${{ github.event.pull_request.number }}/comments" -F body=@/tmp/clippy-comment.md
       - name: Clippy, diagnostics build
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       # Includes xtask's repository_passes_policy, the asset-policy check.
@@ -67,7 +73,7 @@ jobs:
         with:
           key: linux-${{ matrix.target }}
       - name: Install the cross compiler
-        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.toolchain == 'mingw' && 'mingw-w64' || 'clang' }}
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.toolchain == 'mingw' && 'mingw-w64' || 'clang llvm' }}
       - name: Install cargo-xwin
         if: matrix.toolchain == 'xwin'
         run: cargo install cargo-xwin --locked
