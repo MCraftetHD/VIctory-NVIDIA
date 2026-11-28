@@ -2786,6 +2786,9 @@ struct Flight {
 }
 
 /// One thing in the line of what waits for the card, in order.
+#[allow(clippy::large_enum_variant)]
+/// (`Run` carries a `Flight`; the line holds few of them, and boxing one
+/// would put it on the heap for nothing)
 enum Late {
     Run(Flight),
     /// A bottom-of-pipe write of the flight before it: address, what, bytes.
@@ -3852,6 +3855,7 @@ fn late_line(frames: f64) {
 pub(crate) mod aside;
 pub(crate) mod awake;
 mod card_steps;
+#[cfg(feature = "diagnostics")]
 pub(crate) mod indirects;
 mod font;
 mod menu;
@@ -8260,6 +8264,8 @@ enum Touch {
     /// The copy is given to shaders.
     Write(usize),
     /// Title memory is written.
+    #[allow(dead_code)]
+    /// (nothing constructs it today; kept for what the reports may name)
     Title,
     Nothing,
     /// Another part of the submission begins.
