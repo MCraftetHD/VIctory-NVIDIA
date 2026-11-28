@@ -118,6 +118,73 @@ powershell -ExecutionPolicy Bypass -File scripts\play-nvidia.ps1 -Exe 'D:\Games\
 Put the path to **your** `game_scarlett_master.exe` in the last line. The
 first start builds the layer, which takes a few minutes.
 
+**On CachyOS (Linux): build it there, run it under Wine**
+
+The program stays Windows-only (it runs the title's own image inside its own
+process), but the exe can be built from Linux and started under Wine like any
+other. `scripts/build-on-linux.sh` does it, in a clone of this repository:
+
+```bash
+sudo pacman -S --needed rustup     # once
+./scripts/build-on-linux.sh        # MinGW build: what pacman has
+./scripts/build-on-linux.sh --msvc # MSVC build: needs clang and cargo-xwin (crates.io)
+```
+
+The exe lands in `target/<target>/release/victory.exe`; put it next to
+**your** `game_scarlett_master.exe` as above. One difference between the two:
+only the MSVC build carries the D3D12 Agility exports (a Visual Studio linker
+feature), so on Windows a MinGW-built exe runs the system's Direct3D 12
+runtime. Under Wine neither route matters there: the Direct3D 12
+`victory.exe` loads is Wine's own, which offers shader model 6.0 — the next
+paragraph is about that. Continuous integration builds both routes on Linux
+on every pull request, so the script stays working.
+
+The title's translated shaders need shader model 6.6; Wine's own Direct3D 12
+(vkd3d) stops at 6.0, so victory refuses to start the game, and right: every
+shader would be refused. Under Wine the Agility `D3D12/` folder is no remedy
+— Wine's runtime does not read a `D3D12Core.dll` beside the exe — instead,
+give Wine vkd3d-proton's Direct3D 12 (shader model 6.6), the one Proton runs:
+
+```bash
+# the easy way: Proton brings vkd3d-proton (and DXVK) with it. In Steam:
+# games > add a non-Steam game > victory.exe; compatibility > Proton
+# Experimental or CachyOS's proton-cachyos; launch options:
+#   %command% --series-s
+# (--series-s is the profile a card without DLSS runs, see "How to run it")
+
+# or keep this prefix and hand it vkd3d-proton's d3d12:
+WINEPREFIX=~/.wine ./setup_vkd3d_proton.sh install   # from the release zip
+wine victory.exe play --series-s --framegen 2        # from the dump's folder
+```
+
+The dlls ship prebuilt in vkd3d-proton's GitHub releases. Out of a Proton
+one already has they sit under `files/lib64/wine/vkd3d-proton/` (Proton 8
+and older: `dist/lib64/wine/...`); then
+`WINEDLLOVERRIDES="d3d12,d3d12core=n" wine victory.exe play --series-s` runs
+them without touching the prefix. A GTX 1080 Ti meets what vkd3d-proton asks
+for shader model 6.6 on current NVIDIA drivers; if the start still finds
+something short, it says what.
+
+NVIDIA's, AMD's and Microsoft's fetchers (`victory get-dlss`, `victory
+get-fsr`, `victory get-d3d12`) run Windows PowerShell, which Wine only
+stubs: none of them downloads anything there. `scripts/fetch-under-linux.sh
+<folder of the game>` fetches the same files instead — AMD's two FidelityFX
+DLLs and NVIDIA's Streamline, the same versions, checked against the same
+checksums — into `fidelityfx/` and `nvidia-sdk/Streamline/bin/x64` beside
+the exe. Frame generation is asked for with `--framegen 2` (2X on FSR 3,
+which needs NVIDIA's files for the DLSS upscaling as well as AMD's two).
+(`get-d3d12` has no Linux
+stand-in: its Agility runtime is the Windows remedy, and under Wine the
+Direct3D 12 is Wine's or vkd3d-proton's, as the paragraph above says.) The
+start looks for them in a
+`fidelityfx` and an `nvidia-sdk/Streamline/bin/x64` folder beside the exe, or
+under the victory folder Wine keeps
+(`C:\users\<you>\AppData\Local\victory\amd-fidelityfx`,
+`...\nvidia-sdk\Streamline\bin\x64`, what `get-fsr` and `get-dlss` would
+have made). A card without DLSS needs the AMD files only.
+
+Not tested here: the CI job proves the build, not the run under Wine.
+
 Options, requirements in full and the details are under
 [How to run it](#how-to-run-it).
 
